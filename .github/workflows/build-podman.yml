@@ -1,0 +1,31 @@
+name: Build and Run Podman Container
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-container:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Podman image
+        id: build-image
+        run: |
+          podman build . -t my-nginx-image
+          podman images
+          echo "IMAGE_ID=$(podman images -q my-nginx-image)" >> $GITHUB_ENV
+
+      - name: Run Podman container
+        run: |
+          podman run -d -p 8080:80 --name my-nginx-container ${{ env.IMAGE_ID }}
+          echo "Container is running. Check logs for confirmation."
+
+      - name: Verify Nginx is serving the page
+        run: |
+          sleep 5 # Give the container time to start
+          curl http://localhost:8080 | grep "Hello, Podman!"
