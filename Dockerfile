@@ -8,17 +8,18 @@ LABEL maintainer="CloudComputing Project"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
-# Base deps (no MySQL yet)
+# Base deps (with retries; no MySQL yet)
 # --------------------------------------------------
 RUN set -eux; \
-    apt-get update; \
+    apt-get update -o Acquire::Retries=5; \
     apt-get install -y --no-install-recommends \
-      ca-certificates curl wget git gnupg2 lsb-release software-properties-common debconf-utils \
+      ca-certificates curl wget git gnupg lsb-release debconf-utils \
       python3 python3-pip python3-venv \
       openjdk-11-jre-headless \
       redis-server \
       adduser libfontconfig1 \
-    ; rm -rf /var/lib/apt/lists/*
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Oracle MySQL APT repo via mysql-apt-config (noninteractive)
@@ -30,7 +31,7 @@ RUN set -eux; \
     echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts" | debconf-set-selections; \
     dpkg -i /tmp/mysql-apt-config.deb; \
     rm -f /etc/apt/sources.list.d/mysql.list.save || true; \
-    apt-get update; \
+    apt-get update -o Acquire::Retries=5; \
     apt-get install -y --no-install-recommends mysql-server; \
     rm -rf /var/lib/apt/lists/* /tmp/mysql-apt-config.deb
 
@@ -59,9 +60,10 @@ RUN wget -q https://github.com/prometheus/prometheus/releases/download/v2.54.0/p
 
 # NOTE: This .deb is amd64. If you later build multi-arch (arm64),
 # either pin the workflow to amd64 or fetch the arch dynamically.
-RUN wget -q https://dl.grafana.com/oss/release/grafana_11.1.0_amd64.deb && \
-    apt-get update && apt-get install -y ./grafana_11.1.0_amd64.deb && \
-    rm grafana_11.1.0_amd64.deb
+RUN apt-get update -o Acquire::Retries=5 && \
+    wget -q https://dl.grafana.com/oss/release/grafana_11.1.0_amd64.deb && \
+    apt-get install -y ./grafana_11.1.0_amd64.deb && \
+    rm -rf /var/lib/apt/lists/* grafana_11.1.0_amd64.deb
 
 RUN wget -q https://github.com/google/cadvisor/releases/download/v0.47.0/cadvisor && \
     chmod +x cadvisor && mv cadvisor /usr/local/bin/
