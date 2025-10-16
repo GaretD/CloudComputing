@@ -11,7 +11,7 @@ How the workflow works
 
 How to run from your local machine:
 1. Authenticate to the registry:
-# Log in to GitHub Container Registry
+Log in to GitHub Container Registry
 podman login ghcr.io -u <YOUR_GITHUB_USERNAME> -p <YOUR_PERSONAL_ACCESS_TOKEN>
 
 2. Pull the image:
