@@ -9,7 +9,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
 # Base deps (with retries; no MySQL yet)
-# NOTE: Use default-jre-headless on Debian 12 (bookworm) instead of openjdk-11-jre-headless.
 # --------------------------------------------------
 RUN set -eux; \
     apt-get update -o Acquire::Retries=5; \
@@ -24,7 +23,7 @@ RUN set -eux; \
 
 # --------------------------------------------------
 # Oracle MySQL APT repo via mysql-apt-config (noninteractive)
-# - Preseed selection to mysql-8.4-lts to avoid interactive prompt
+# - Preseed the selection to mysql-8.4-lts to avoid any prompt
 # - Then install mysql-server
 # --------------------------------------------------
 RUN set -eux; \
@@ -66,8 +65,12 @@ RUN apt-get update -o Acquire::Retries=5 && \
     apt-get install -y ./grafana_11.1.0_amd64.deb && \
     rm -rf /var/lib/apt/lists/* grafana_11.1.0_amd64.deb
 
-RUN wget -q https://github.com/google/cadvisor/releases/download/v0.47.0/cadvisor && \
-    chmod +x cadvisor && mv cadvisor /usr/local/bin/
+# cAdvisor (use a current release and resilient download)
+ARG CADVISOR_VERSION=v0.49.1
+RUN set -eux; \
+    curl -fL --retry 5 -o /usr/local/bin/cadvisor \
+      "https://github.com/google/cadvisor/releases/download/${CADVISOR_VERSION}/cadvisor"; \
+    chmod +x /usr/local/bin/cadvisor
 
 # --------------------------------------------------
 # Copy application + nginx config + monitoring
@@ -96,4 +99,3 @@ EXPOSE 80 9090 3000 8081 9092 3306 6379 4040
 # --------------------------------------------------
 RUN chmod +x /app/start-all.sh
 ENTRYPOINT ["/app/start-all.sh"]
-
