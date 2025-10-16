@@ -6,9 +6,18 @@ echo "[init] Starting multi-service Cloud Computing stack (nginx-based)..."
 # ----------------------------
 # MySQL
 # ----------------------------
-echo "[mysql] Starting mysqld..."
+echo "[mysql] Preparing mysqld..."
 mkdir -p /var/run/mysqld
 chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true
+
+# MySQL init if needed
+if [ ! -d /var/lib/mysql/mysql ]; then
+  echo "[mysql] Initializing data directory..."
+  mysqld --initialize-insecure
+  chown -R mysql:mysql /var/lib/mysql
+fi
+
+echo "[mysql] Starting mysqld..."
 mysqld --daemonize || (echo "[mysql] mysqld failed to start" && exit 1)
 
 # ----------------------------

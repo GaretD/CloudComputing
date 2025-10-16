@@ -1,94 +1,85 @@
-# CloudComputing Project Dockerfile (nginx-based)
-# Multi-service container with nginx (serving static site), Python, MySQL, Redis,
-# Kafka (w/ ZooKeeper), Spark Mini, Grafana, Prometheus, and cAdvisor.
-# Works with Docker and Podman.
-
+# --------------------------------------------------
+# CloudComputing Project - Unified Container
+# Base: NGINX (serves /app via /usr/share/nginx/html)
+# --------------------------------------------------
 FROM nginx:latest
 
-LABEL maintainer="your-name@example.com"
-LABEL description="Cloud Computing demo container with nginx + monitoring/analytics stack"
-
+LABEL maintainer="CloudComputing Project"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
-# Install system packages and runtimes
+# System deps + Oracle MySQL APT repo + mysql-server
 # --------------------------------------------------
-RUN apt-get update && apt-get install -y \
-    wget curl git gnupg2 software-properties-common lsb-release \
-    python3 python3-pip python3-venv \
-    openjdk-11-jre-headless \
-    mysql-server redis-server \
-    adduser libfontconfig1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates curl wget git gnupg2 lsb-release software-properties-common \
+      python3 python3-pip python3-venv \
+      openjdk-11-jre-headless \
+      redis-server \
+      adduser libfontconfig1 \
+    ; \
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl -fsSL https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 | gpg --dearmor -o /etc/apt/keyrings/mysql.gpg; \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/mysql.gpg] https://repo.mysql.com/apt/debian/ $(. /etc/os-release && echo $VERSION_CODENAME) mysql-8.4" > /etc/apt/sources.list.d/mysql.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends mysql-server; \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Install Kafka and Spark Mini
+# Kafka + Spark Mini Setup
 # --------------------------------------------------
 WORKDIR /opt
+RUN wget -q https://archive.apache.org/dist/kafka/3.7.0/kafka_2.13-3.7.0.tgz && \
+    tar -xzf kafka_2.13-3.7.0.tgz && \
+    mv kafka_2.13-3.7.0 kafka && \
+    rm kafka_2.13-3.7.0.tgz
 
-# Kafka
-RUN wget -q https://archive.apache.org/dist/kafka/3.6.1/kafka_2.13-3.6.1.tgz && \
-    tar -xzf kafka_2.13-3.6.1.tgz && mv kafka_2.13-3.6.1 kafka && rm kafka_2.13-3.6.1.tgz
-
-# Spark
 RUN wget -q https://archive.apache.org/dist/spark/spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz && \
-    tar -xzf spark-3.5.1-bin-hadoop3.tgz && mv spark-3.5.1-bin-hadoop3 spark && rm spark-3.5.1-bin-hadoop3.tgz
-
-ENV PATH="/opt/spark/bin:/opt/kafka/bin:$PATH"
+    tar -xzf spark-3.5.1-bin-hadoop3.tgz && \
+    mv spark-3.5.1-bin-hadoop3 spark && \
+    rm spark-3.5.1-bin-hadoop3.tgz
 
 # --------------------------------------------------
-# Install Prometheus, Grafana, and cAdvisor
+# Prometheus + Grafana + cAdvisor
 # --------------------------------------------------
-RUN mkdir -p /opt/monitoring
-
-# Prometheus
+WORKDIR /opt/monitoring
 RUN wget -q https://github.com/prometheus/prometheus/releases/download/v2.54.0/prometheus-2.54.0.linux-amd64.tar.gz && \
-    tar -xzf prometheus-2.54.0.linux-amd64.tar.gz && mv prometheus-2.54.0.linux-amd64 /opt/monitoring/prometheus && rm prometheus-2.54.0.linux-amd64.tar.gz
+    tar -xzf prometheus-2.54.0.linux-amd64.tar.gz && \
+    mv prometheus-2.54.0.linux-amd64 prometheus && \
+    rm prometheus-2.54.0.linux-amd64.tar.gz
 
-# Grafana
-RUN wget -q https://dl.grafana.com/oss/release/grafana_11.1.0_amd64.deb && apt-get update && apt-get install -y ./grafana_11.1.0_amd64.deb && rm grafana_11.1.0_amd64.deb
+RUN wget -q https://dl.grafana.com/oss/release/grafana_11.1.0_amd64.deb && \
+    apt-get update && apt-get install -y ./grafana_11.1.0_amd64.deb && \
+    rm grafana_11.1.0_amd64.deb
 
-# cAdvisor
-RUN wget -q -O /usr/local/bin/cadvisor https://github.com/google/cadvisor/releases/download/v0.49.1/cadvisor && chmod +x /usr/local/bin/cadvisor
+RUN wget -q https://github.com/google/cadvisor/releases/download/v0.47.0/cadvisor && \
+    chmod +x cadvisor && mv cadvisor /usr/local/bin/
 
 # --------------------------------------------------
-# Copy app content and configs
+# Copy application + nginx config + monitoring
 # --------------------------------------------------
 WORKDIR /app
 COPY . /app
-
-# Serve static site via nginx document root
-RUN rm -rf /usr/share/nginx/html/* && \
-    mkdir -p /usr/share/nginx/html && \
-    cp -r /app/* /usr/share/nginx/html/
-
-# Python libs (optional for clients/tools)
-RUN pip install --no-cache-dir flask redis mysql-connector-python kafka-python pyspark prometheus-client
-
-# Prometheus config
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY prometheus.yml /opt/monitoring/prometheus/prometheus.yml
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Startup script orchestrates all services then execs nginx in foreground
-COPY start-all.sh /usr/local/bin/start-all.sh
-RUN chmod +x /usr/local/bin/start-all.sh
+# --------------------------------------------------
+# Environment variables
+# --------------------------------------------------
+ENV PATH="/opt/spark/bin:/opt/kafka/bin:${PATH}"
+ENV MYSQL_ROOT_PASSWORD=root
+ENV MYSQL_DATABASE=cloudcomputing
+ENV MYSQL_USER=appuser
+ENV MYSQL_PASSWORD=app123
 
 # --------------------------------------------------
 # Expose ports
-#   80    nginx (web)
-#   9090  Prometheus
-#   3000  Grafana
-#   8081  cAdvisor
-#   9092  Kafka
-#   3306  MySQL
-#   6379  Redis
-#   4040  Spark UI
 # --------------------------------------------------
 EXPOSE 80 9090 3000 8081 9092 3306 6379 4040
 
 # --------------------------------------------------
-# Entrypoint
+# Startup script
 # --------------------------------------------------
-CMD ["/usr/local/bin/start-all.sh"]
+RUN chmod +x /app/start-all.sh
+ENTRYPOINT ["/app/start-all.sh"]
