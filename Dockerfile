@@ -9,13 +9,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
 # Base deps (with retries; no MySQL yet)
+# NOTE: Use default-jre-headless on Debian 12 (bookworm) instead of openjdk-11-jre-headless.
 # --------------------------------------------------
 RUN set -eux; \
     apt-get update -o Acquire::Retries=5; \
     apt-get install -y --no-install-recommends \
       ca-certificates curl wget git gnupg lsb-release debconf-utils \
       python3 python3-pip python3-venv \
-      openjdk-11-jre-headless \
+      default-jre-headless \
       redis-server \
       adduser libfontconfig1 \
     ; \
@@ -23,7 +24,7 @@ RUN set -eux; \
 
 # --------------------------------------------------
 # Oracle MySQL APT repo via mysql-apt-config (noninteractive)
-# - Preseed the selection to mysql-8.4-lts to avoid any prompt
+# - Preseed selection to mysql-8.4-lts to avoid interactive prompt
 # - Then install mysql-server
 # --------------------------------------------------
 RUN set -eux; \
