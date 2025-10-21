@@ -18,7 +18,7 @@ if [ ! -d /var/lib/mysql/mysql ]; then
 fi
 
 echo "[mysql] Starting mysqld..."
-mysqld --daemonize || (echo "[mysql] mysqld failed to start" && exit 1)
+mysqld --user=mysql --daemonize || (echo "[mysql] mysqld failed to start" && exit 1)
 
 # ----------------------------
 # Redis
