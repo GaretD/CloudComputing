@@ -87,6 +87,12 @@ RUN set -eux; \
 # --------------------------------------------------
 WORKDIR /app
 COPY . /app
+
+# Serve our site via Nginx default web root
+COPY index.html /usr/share/nginx/html/index.html
+# (only if you have an images folder)
+COPY images /usr/share/nginx/html/images
+
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY prometheus.yml /opt/monitoring/prometheus/prometheus.yml
 
