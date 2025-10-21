@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloudcomputing-app
+    ports:
+    - 8080:80
+    - 9090:9090
+    - 3000:3000
+    - 8081:8081
+    - 9092:9092
+    - 3306:3306
+    - 6379:6379
+    restart: unless-stopped
