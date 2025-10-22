@@ -23,23 +23,12 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Install Oracle MySQL 8.4 LTS (non-interactive, robust)
+# Install MariaDB server (drop-in for MySQL)
 # --------------------------------------------------
 RUN set -eux; \
     apt-get update -o Acquire::Retries=5; \
-    apt-get install -y --no-install-recommends \
-      ca-certificates gnupg lsb-release wget; \
-    \
-    wget -q -O /tmp/mysql-apt-config.deb \
-      https://repo.mysql.com/mysql-apt-config_0.8.33-1_all.deb; \
-    # Preseed to choose MySQL 8.4 LTS server without prompts
-    echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts" | debconf-set-selections; \
-    echo "mysql-apt-config mysql-apt-config/select-product select Ok" | debconf-set-selections; \
-    DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/mysql-apt-config.deb || true; \
-    rm -f /etc/apt/sources.list.d/mysql.list.save || true; \
-    apt-get update -o Acquire::Retries=5; \
-    apt-get install -y --no-install-recommends mysql-community-server; \
-    rm -rf /var/lib/apt/lists/* /tmp/mysql-apt-config.deb
+    apt-get install -y --no-install-recommends mariadb-server; \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Install Kafka and Spark
@@ -99,10 +88,7 @@ ARG APP_HASH
 RUN echo "APP_HASH=$APP_HASH"
 
 # --------------------------------------------------
-# ✅ Permanent Fix
-# - Remove default site
-# - Copy index.html + assets
-# - Copy Phase*.html into /phases (using find for robustness)
+# Web content: remove default site, copy index/assets, copy Phase*.html
 # --------------------------------------------------
 RUN set -eux; \
     rm -f /etc/nginx/conf.d/default.conf || true; \
@@ -117,7 +103,7 @@ RUN set -eux; \
     find /app -maxdepth 1 -type f -name 'Phase*.html' -exec cp -t /usr/share/nginx/html/phases {} +
 
 # --------------------------------------------------
-# Environment variables
+# Environment variables (used by your start script)
 # --------------------------------------------------
 ENV PATH="/opt/spark/bin:/opt/kafka/bin:${PATH}"
 ENV MYSQL_ROOT_PASSWORD=root
