@@ -18,6 +18,7 @@ RUN set -eux; \
       default-jre-headless \
       redis-server \
       adduser libfontconfig1 \
+      findutils \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -94,7 +95,7 @@ RUN echo "APP_HASH=$APP_HASH"
 # ✅ Permanent Fix
 # - Remove default site
 # - Copy index.html + optional assets
-# - Copy Phase*.html pages into /phases
+# - Copy Phase*.html pages into /phases (robust via `find`)
 # --------------------------------------------------
 RUN set -eux; \
     rm -f /etc/nginx/conf.d/default.conf || true; \
@@ -107,9 +108,9 @@ RUN set -eux; \
         cp -r "/app/$d" "/usr/share/nginx/html/$d"; \
       fi; \
     done; \
-    # copy Phase pages into /phases
+    # copy Phase pages into /phases (no-op if none exist)
     mkdir -p /usr/share/nginx/html/phases; \
-    sh -c 'set -e; for f in /app/Phase*.html; do [ -e "$f" ] && cp "$f" /usr/share/nginx/html/phases/; done'
+    find /app -maxdepth 1 -type f -name 'Phase*.html' -exec cp -t /usr/share/nginx/html/phases {} +
 
 # --------------------------------------------------
 # Environment variables
