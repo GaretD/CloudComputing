@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Local Image Gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --gap: 12px; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0c10; color:#e6e6e6; }
+    header { padding: 24px; display:flex; gap:16px; flex-wrap:wrap; align-items:center; border-bottom:1px solid #222; }
+    h1 { margin:0; font-size:1.1rem; font-weight:600; letter-spacing:.25px; }
+    .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .btn {
+      appearance:none; border:1px solid #444; background:#141519; color:#e6e6e6;
+      padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600;
+    }
+    .btn:hover { background:#191b21; }
+    #count { opacity:.8; font-size:.95rem; }
+    #gallery {
+      padding: var(--gap);
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: var(--gap);
+    }
+    .card {
+      background:#111318; border:1px solid #1f2026; border-radius:14px; overflow:hidden;
+      display:flex; flex-direction:column;
+    }
+    .thumb {
+      aspect-ratio: 1 / 1; object-fit:cover; width:100%; background:#0e0f13;
+    }
+    .meta {
+      padding:10px; font-size:.82rem; color:#cfd3dc; word-break:break-all;
+    }
+    .dropzone {
+      margin-left:auto; border:1px dashed #444; padding:10px 14px; border-radius:10px; opacity:.9;
+    }
+    .dropzone.drag { border-color:#6aa9ff; background:#111827; }
+    footer { padding: 12px 16px; font-size:.85rem; color:#9aa3af; border-top:1px solid #222; }
+    a { color:#9ecbff; }
+    input[type="file"] { display:none; }
+    .pill { background:#1b2838; color:#dce7f7; padding:2px 8px; border-radius:999px; font-size:.75rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Local Image Gallery <span id="count" class="pill">0 images</span></h1>
+    <div class="controls">
+      <label class="btn" for="picker">Choose a folder</label>
+      <input id="picker" type="file" webkitdirectory directory multiple accept="image/*" />
+      <label class="btn" for="files">Or select images</label>
+      <input id="files" type="file" multiple accept="image/*" />
+      <div id="dropzone" class="dropzone" title="Drag & drop images here">…or drag & drop images</div>
+    </div>
+  </header>
+
+  <main id="gallery" aria-live="polite"></main>
+
+  <footer>
+    Tip: Browsers can’t read directories automatically for security. Use the folder picker above. Thumbnails are created with
+    <code>URL.createObjectURL</code> and never leave your device.
+  </footer>
+
+  <script>
+    const picker = document.getElementById('picker');
+    const filesInput = document.getElementById('files');
+    const dropzone = document.getElementById('dropzone');
+    const gallery = document.getElementById('gallery');
+    const countEl = document.getElementById('count');
+
+    const IMG_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.bmp','.svg','.avif','.tif','.tiff']);
+
+    function isImageFile(file) {
+      if (file.type.startsWith('image/')) return true;
+      const name = file.name.toLowerCase();
+      return [...IMG_EXTS].some(ext => name.endsWith(ext));
+    }
+
+    function updateCount(n) {
+      countEl.textContent = `${n} image${n===1?'':'s'}`;
+    }
+
+    function clearGallery() {
+      // Revoke any previous object URLs
+      for (const img of gallery.querySelectorAll('img[data-bloburl="1"]')) {
+        URL.revokeObjectURL(img.src);
+      }
+      gallery.innerHTML = '';
+      updateCount(0);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024, sizes = ['B','KB','MB','GB','TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    async function renderFiles(fileList) {
+      const files = [...fileList].filter(isImageFile);
+      clearGallery();
+      if (files.length === 0) { updateCount(0); return; }
+
+      // Stable sort by path/name for predictable order
+      files.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+
+      const frag = document.createDocumentFragment();
+      for (const file of files) {
+        const url = URL.createObjectURL(file);
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.loading = 'lazy';
+        img.alt = file.name;
+        img.src = url;
+        img.setAttribute('data-bloburl', '1');
+        img.addEventListener('error', () => { img.replaceWith(Object.assign(document.createElement('div'), {textContent: 'Failed to load', className: 'meta'})); });
+        img.addEventListener('load', () => {
+          // Revoke after it has loaded into memory to free resources
+          // (leave a tiny delay to keep previews smooth)
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        });
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const path = file.webkitRelativePath || file.name;
+        meta.textContent = `${path} · ${formatBytes(file.size)}`;
+
+        card.appendChild(img);
+        card.appendChild(meta);
+        frag.appendChild(card);
+      }
+      gallery.appendChild(frag);
+      updateCount(files.length);
+    }
+
+    picker.addEventListener('change', e => renderFiles(e.target.files));
+    filesInput.addEventListener('change', e => renderFiles(e.target.files));
+
+    // Drag & drop (images only; folder drag varies by browser)
+    ;['dragenter','dragover'].forEach(ev =>
+      dropzone.addEventListener(ev, e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; dropzone.classList.add('drag'); })
+    );
+    ;['dragleave','drop'].forEach(ev =>
+      dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); })
+    );
+    dropzone.addEventListener('drop', e => {
+      const items = e.dataTransfer.items;
+      if (items && items.length) {
+        // If directories are dropped, some browsers flatten to files automatically.
+        const files = [];
+        for (const i of items) {
+          if (i.kind === 'file') files.push(i.getAsFile());
+        }
+        renderFiles(files);
+      } else if (e.dataTransfer.files) {
+        renderFiles(e.dataTransfer.files);
+      }
+    });
+  </script>
+
+<!-- Auto-inserted gallery -->
+<section id="image-gallery">
+  <h2>Image Gallery</h2>
+  <div class="gallery-grid">
+    <figure class="gallery-item">
+                <img src="images/pexels-asadphoto-240526.jpg" alt="pexels-asadphoto-240526.jpg" loading="lazy">
+                <figcaption>pexels-asadphoto-240526.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-daniyal-ghanavati-10741-70069.jpg" alt="pexels-daniyal-ghanavati-10741-70069.jpg" loading="lazy">
+                <figcaption>pexels-daniyal-ghanavati-10741-70069.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-eberhardgross-2098427.jpg" alt="pexels-eberhardgross-2098427.jpg" loading="lazy">
+                <figcaption>pexels-eberhardgross-2098427.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-francesco-ungaro-2325447.jpg" alt="pexels-francesco-ungaro-2325447.jpg" loading="lazy">
+                <figcaption>pexels-francesco-ungaro-2325447.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-ithalu-907485.jpg" alt="pexels-ithalu-907485.jpg" loading="lazy">
+                <figcaption>pexels-ithalu-907485.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-jmark-250591.jpg" alt="pexels-jmark-250591.jpg" loading="lazy">
+                <figcaption>pexels-jmark-250591.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-jonaskakaroto-736230.jpg" alt="pexels-jonaskakaroto-736230.jpg" loading="lazy">
+                <figcaption>pexels-jonaskakaroto-736230.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-lum3n-44775-167684.jpg" alt="pexels-lum3n-44775-167684.jpg" loading="lazy">
+                <figcaption>pexels-lum3n-44775-167684.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pawelkalisinski-1076758.jpg" alt="pexels-pawelkalisinski-1076758.jpg" loading="lazy">
+                <figcaption>pexels-pawelkalisinski-1076758.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-philippedonn-1133957.jpg" alt="pexels-philippedonn-1133957.jpg" loading="lazy">
+                <figcaption>pexels-philippedonn-1133957.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-147411.jpg" alt="pexels-pixabay-147411.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-147411.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-39517.jpg" alt="pexels-pixabay-39517.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-39517.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-40784.jpg" alt="pexels-pixabay-40784.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-40784.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-46160.jpg" alt="pexels-pixabay-46160.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-46160.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-47547.jpg" alt="pexels-pixabay-47547.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-47547.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-60013.jpg" alt="pexels-pixabay-60013.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-60013.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-pixabay-69776.jpg" alt="pexels-pixabay-69776.jpg" loading="lazy">
+                <figcaption>pexels-pixabay-69776.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-sebastian-palomino-933481-1955134.jpg" alt="pexels-sebastian-palomino-933481-1955134.jpg" loading="lazy">
+                <figcaption>pexels-sebastian-palomino-933481-1955134.jpg</figcaption>
+            </figure>
+<figure class="gallery-item">
+                <img src="images/pexels-todd-trapani-488382-1420440.jpg" alt="pexels-todd-trapani-488382-1420440.jpg" loading="lazy">
+                <figcaption>pexels-todd-trapani-488382-1420440.jpg</figcaption>
+            </figure>
+  </div>
+</section>
+<style>
+  /* Simple responsive gallery */
+  #image-gallery { padding: 1rem 0; }
+  #image-gallery h2 { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+  .gallery-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 8px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .gallery-item img {
+    width: 100%;
+    height: 160px;
+    object-fit: contain;
+    display: block;
+    border-radius: 8px;
+    background: #f9fafb;
+  }
+  .gallery-item figcaption {
+    font-size: 0.85rem;
+    color: #374151;
+    margin-top: 6px;
+    text-align: center;
+    word-break: break-word;
+  }
+  @media (prefers-color-scheme: dark) {
+    .gallery-item { background: #0b0b0c; border-color: #262626; }
+    .gallery-item figcaption { color: #d1d5db; }
+    .gallery-item img { background: #111827; }
+  }
+</style>
+<!-- /Auto-inserted gallery -->
+</body>
+</html>
