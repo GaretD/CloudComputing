@@ -91,19 +91,25 @@ ARG APP_HASH
 RUN echo "APP_HASH=$APP_HASH"
 
 # --------------------------------------------------
-# Removes Nginx default site, replaces with app’s index.html
-# Copies optional asset dirs if they exist
+# ✅ Permanent Fix
+# - Remove default site
+# - Copy index.html + optional assets
+# - Copy Phase*.html pages into /phases
 # --------------------------------------------------
 RUN set -eux; \
     rm -f /etc/nginx/conf.d/default.conf || true; \
     rm -rf /usr/share/nginx/html/*; \
+    # copy the main navigation page
     cp /app/index.html /usr/share/nginx/html/index.html; \
+    # copy optional asset folders if present
     for d in images css js assets static; do \
       if [ -d "/app/$d" ]; then \
-        echo "Copying /app/$d → /usr/share/nginx/html/$d"; \
         cp -r "/app/$d" "/usr/share/nginx/html/$d"; \
       fi; \
-    done
+    done; \
+    # copy Phase pages into /phases
+    mkdir -p /usr/share/nginx/html/phases; \
+    sh -c 'set -e; for f in /app/Phase*.html; do [ -e "$f" ] && cp "$f" /usr/share/nginx/html/phases/; done'
 
 # --------------------------------------------------
 # Environment variables
