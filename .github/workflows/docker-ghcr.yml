@@ -53,4 +53,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            APP_HASH=${{ hashFiles('index.html') }}
+            # Rebuild when any of these change
+            APP_HASH=${{ hashFiles('index.html', 'images/**', 'css/**', 'js/**', 'assets/**', 'static/**') }}APP_HASH=${{ hashFiles('index.html') }}aa
