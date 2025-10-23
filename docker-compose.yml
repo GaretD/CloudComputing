@@ -1,16 +1,73 @@
-version: '3.8'
+version: "3.9"
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: cloudcomputing-app
+  nginx:
+    image: nginx:1.25-bookworm
+    container_name: cc_nginx
+    depends_on:
+      - mariadb
     ports:
-    - 8080:80
-    - 9090:9090
-    - 3000:3000
-    - 8081:8081
-    - 9092:9092
-    - 3306:3306
-    - 6379:6379
+      - "8080:80"
+    volumes:
+      # Serve your existing site folder (adjust if your site lives elsewhere)
+      - ./:/usr/share/nginx/html:ro
+      # Custom nginx config
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
+    networks: [cc_net]
+
+  mariadb:
+    image: mariadb:11
+    container_name: cc_mariadb
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD:-root}
+      - MARIADB_DATABASE=${MARIADB_DATABASE:-cloudcomputing}
+      - MARIADB_USER=${MARIADB_USER:-appuser}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD:-app123}
+    volumes:
+      - db_data:/var/lib/mysql
+      # Optional: initialize schema/data by placing .sql in ./db-init
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks: [cc_net]
+
+  # --- OPTIONAL: Monitoring stack (comment out if not needed) ---
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: cc_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks: [cc_net]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: cc_grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks: [cc_net]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cc_cadvisor
+    ports:
+      - "8081:8080"
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks: [cc_net]
+  # --- END OPTIONAL ---
+
+volumes:
+  db_data:
+
+networks:
+  cc_net:
+    driver: bridge
