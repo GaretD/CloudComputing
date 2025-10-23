@@ -2,7 +2,7 @@ name: Docker Image (GHCR)
 
 on:
   push:
-    branches: [ "main" ]   # adjust if your default branch isn’t 'main'
+    branches: [ "main" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -27,11 +26,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Create a lowercase image name: ghcr.io/garetd/cloudcomputing
-      - name: Compute image name (lowercase)
-        id: imagename
-        run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+      - name: Lowercase image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Docker metadata
         id: meta
@@ -39,9 +35,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}   # push latest on default branch
-            type=sha                                             # push sha-<commit>
-            type=ref,event=tag                                   # push v1.2.3 on tags
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+            type=ref,event=tag
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -53,5 +49,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            # Rebuild when any of these change
-            APP_HASH=${{ hashFiles('index.html', 'images/**', 'css/**', 'js/**', 'assets/**', 'static/**') }}APP_HASH=${{ hashFiles('index.html') }}aa
+            APP_HASH=${{ hashFiles('index.html', 'Phase*.html', 'images/**', 'css/**', 'js/**', 'assets/**', 'static/**') }}
