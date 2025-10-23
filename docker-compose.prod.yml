@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   nginx:
+    # Pull the baked image that CI pushed to GHCR for your branch/tag
     image: ghcr.io/${OWNER}/${REPO}-nginx:${TAG:-latest}
     container_name: cc_nginx
     depends_on:
@@ -21,6 +22,7 @@ services:
       - MARIADB_PASSWORD=${MARIADB_PASSWORD:-app123}
     volumes:
       - db_data:/var/lib/mysql
+      # Auto-run .sql files on first start (optional)
       - ./db-init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     networks: [cc_net]
