@@ -3,32 +3,32 @@
 # Base: NGINX (serves content from /usr/share/nginx/html)
 # --------------------------------------------------
 FROM nginx:1.25-bookworm
-LABEL maintainer="CloudComputing Project"
 
+LABEL maintainer="CloudComputing Project"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
 # Base dependencies
 # --------------------------------------------------
 RUN set -eux; \
-  apt-get update -o Acquire::Retries=5; \
-  apt-get install -y --no-install-recommends \
-    ca-certificates curl wget git gnupg lsb-release debconf-utils \
-    python3 python3-pip python3-venv \
-    default-jre-headless \
-    redis-server \
-    adduser libfontconfig1 \
-    findutils \
-  ; \
-  rm -rf /var/lib/apt/lists/*
+    apt-get update -o Acquire::Retries=5; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates curl wget git gnupg lsb-release debconf-utils \
+      python3 python3-pip python3-venv \
+      default-jre-headless \
+      redis-server \
+      adduser libfontconfig1 \
+      findutils \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Database: MariaDB (stable on Debian/CI; drop-in for MySQL)
 # --------------------------------------------------
 RUN set -eux; \
-  apt-get update -o Acquire::Retries=5; \
-  apt-get install -y --no-install-recommends mariadb-server; \
-  rm -rf /var/lib/apt/lists/*
+    apt-get update -o Acquire::Retries=5; \
+    apt-get install -y --no-install-recommends mariadb-server; \
+    rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Kafka and Spark (optional components)
@@ -56,17 +56,17 @@ RUN apt-get update -o Acquire::Retries=5 && \
 
 ARG CADVISOR_VERSION=v0.53.0
 RUN set -eux; \
-  ARCH="$(dpkg --print-architecture)"; \
-  case "${ARCH}" in \
-    amd64) CAD_ARCH="linux-amd64" ;; \
-    arm64) CAD_ARCH="linux-arm64" ;; \
-    armhf|arm) CAD_ARCH="linux-arm" ;; \
-    s390x) CAD_ARCH="linux-s390x" ;; \
-    *) echo "Unsupported arch: ${ARCH}"; exit 1 ;; \
-  esac; \
-  curl -fL --retry 5 -o /usr/local/bin/cadvisor \
-    "https://github.com/google/cadvisor/releases/download/${CADVISOR_VERSION}/cadvisor-${CADVISOR_VERSION}-${CAD_ARCH}"; \
-  chmod +x /usr/local/bin/cadvisor
+    ARCH="$(dpkg --print-architecture)"; \
+    case "${ARCH}" in \
+      amd64) CAD_ARCH="linux-amd64" ;; \
+      arm64) CAD_ARCH="linux-arm64" ;; \
+      armhf|arm) CAD_ARCH="linux-arm" ;; \
+      s390x) CAD_ARCH="linux-s390x" ;; \
+      *) echo "Unsupported arch: ${ARCH}"; exit 1 ;; \
+    esac; \
+    curl -fL --retry 5 -o /usr/local/bin/cadvisor \
+      "https://github.com/google/cadvisor/releases/download/${CADVISOR_VERSION}/cadvisor-${CADVISOR_VERSION}-${CAD_ARCH}"; \
+    chmod +x /usr/local/bin/cadvisor
 
 # --------------------------------------------------
 # App + configs
@@ -81,13 +81,17 @@ ARG APP_HASH
 RUN echo "APP_HASH=$APP_HASH"
 
 # --------------------------------------------------
-# Web content: copy EVERYTHING at once to nginx web root
-# (so /phases/Phase1.html and other assets are served)
+# Web content: remove default site, copy index/assets, copy Phase*.html
 # --------------------------------------------------
 RUN set -eux; \
-  rm -f /etc/nginx/conf.d/default.conf || true; \
-  rm -rf /usr/share/nginx/html/*; \
-  cp -r /app/* /usr/share/nginx/html/
+    rm -f /etc/nginx/conf.d/default.conf || true; \
+    rm -rf /usr/share/nginx/html/*; \
+    cp /app/index.html /usr/share/nginx/html/index.html; \
+    for d in images css js assets static; do \
+      if [ -d "/app/$d" ]; then cp -r "/app/$d" "/usr/share/nginx/html/$d"; fi; \
+    done; \
+    mkdir -p /usr/share/nginx/html/phases; \
+    find /app -maxdepth 1 -type f -name 'Phase*.html' -exec cp -t /usr/share/nginx/html/phases {} +
 
 # --------------------------------------------------
 # Environment (used by start script)
