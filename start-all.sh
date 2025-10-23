@@ -1,66 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[init] Starting multi-service Cloud Computing stack (nginx-based)..."
+echo "[init] Starting CloudComputing stack..."
 
-# ----------------------------
-# MySQL
-# ----------------------------
-echo "[mysql] Preparing mysqld..."
-mkdir -p /var/run/mysqld
-chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true
+# --- MySQL/MariaDB (run as mysql)
+if command -v mysqld >/dev/null 2>&1; then
+  echo "[mysql] preparing directories..."
+  install -d -o mysql -g mysql /var/run/mysqld
+  chown -R mysql:mysql /var/lib/mysql || true
 
-# MySQL init if needed
-if [ ! -d /var/lib/mysql/mysql ]; then
-  echo "[mysql] Initializing data directory..."
-  mysqld --initialize-insecure
-  chown -R mysql:mysql /var/lib/mysql
+  # Initialize data dir if empty (MariaDB & MySQL compatible)
+  if [ ! -d /var/lib/mysql/mysql ]; then
+    echo "[mysql] initializing data directory..."
+    if command -v mariadb-install-db >/dev/null 2>&1; then
+      mariadb-install-db --user=mysql --datadir=/var/lib/mysql >/dev/null
+    else
+      mysqld --initialize-insecure --user=mysql --datadir=/var/lib/mysql >/dev/null 2>&1 || true
+    fi
+  fi
+
+  echo "[mysql] starting mysqld..."
+  mysqld --user=mysql --daemonize || echo "[mysql] WARNING: mysqld failed to start (continuing)"
 fi
 
-echo "[mysql] Starting mysqld..."
-mysqld --user=mysql --daemonize || (echo "[mysql] mysqld failed to start" && exit 1)
+# --- Redis (non-fatal if missing)
+if command -v redis-server >/dev/null 2>&1; then
+  echo "[redis] starting..."
+  redis-server --daemonize yes || echo "[redis] WARNING: failed (continuing)"
+fi
 
-# ----------------------------
-# Redis
-# ----------------------------
-echo "[redis] Starting redis-server..."
-redis-server --daemonize yes
+# --- Prometheus (optional)
+if [ -x /opt/monitoring/prometheus/prometheus ]; then
+  echo "[prometheus] starting..."
+  nohup /opt/monitoring/prometheus/prometheus \
+    --config.file=/opt/monitoring/prometheus/prometheus.yml \
+    --storage.tsdb.path=/opt/monitoring/prometheus/data \
+    >/var/log/prometheus.log 2>&1 &
+fi
 
-# ----------------------------
-# ZooKeeper & Kafka
-# ----------------------------
-echo "[kafka] Starting ZooKeeper..."
-/opt/kafka/bin/zookeeper-server-start.sh -daemon /opt/kafka/config/zookeeper.properties
-sleep 5
-echo "[kafka] Starting Kafka broker..."
-/opt/kafka/bin/kafka-server-start.sh -daemon /opt/kafka/config/server.properties || true
+# --- Grafana (optional; Debian service not used inside containers)
+if command -v grafana-server >/dev/null 2>&1; then
+  echo "[grafana] starting..."
+  nohup grafana-server --homepath=/usr/share/grafana >/var/log/grafana.log 2>&1 &
+fi
 
-# ----------------------------
-# Spark
-# ----------------------------
-echo "[spark] Starting Spark history server..."
-/opt/spark/sbin/start-history-server.sh || true
+# --- Kafka/Spark (optional; comment out if you don't need them for web tests)
+# if [ -x /opt/kafka/bin/kafka-server-start.sh ]; then
+#   echo "[kafka] starting..."
+#   nohup /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties >/var/log/kafka.log 2>&1 &
+# fi
 
-# ----------------------------
-# Prometheus
-# ----------------------------
-echo "[prometheus] Starting Prometheus on :9090 ..."
-/opt/monitoring/prometheus/prometheus --config.file=/opt/monitoring/prometheus/prometheus.yml --web.listen-address=:9090 &
-
-# ----------------------------
-# Grafana
-# ----------------------------
-echo "[grafana] Starting Grafana on :3000 ..."
-/usr/sbin/grafana-server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini &
-
-# ----------------------------
-# cAdvisor
-# ----------------------------
-echo "[cadvisor] Starting cAdvisor on :8081 ..."
-nohup cadvisor --port=8081 >/var/log/cadvisor.log 2>&1 &
-
-# ----------------------------
-# nginx (foreground)
-# ----------------------------
-echo "[nginx] Starting nginx (serving /usr/share/nginx/html) on :80 ..."
-exec nginx -g "daemon off;"
+echo "[nginx] starting in foreground on :80..."
+exec nginx -g 'daemon off;'
