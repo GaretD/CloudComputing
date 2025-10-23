@@ -23,7 +23,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Install MariaDB server (drop-in for MySQL)
+# Database: MariaDB (stable on Debian/CI; drop-in for MySQL)
 # --------------------------------------------------
 RUN set -eux; \
     apt-get update -o Acquire::Retries=5; \
@@ -31,18 +31,14 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Install Kafka and Spark
+# Kafka and Spark (optional components)
 # --------------------------------------------------
 WORKDIR /opt
 RUN wget -q https://archive.apache.org/dist/kafka/3.7.0/kafka_2.13-3.7.0.tgz && \
-    tar -xzf kafka_2.13-3.7.0.tgz && \
-    mv kafka_2.13-3.7.0 kafka && \
-    rm kafka_2.13-3.7.0.tgz
+    tar -xzf kafka_2.13-3.7.0.tgz && mv kafka_2.13-3.7.0 kafka && rm kafka_2.13-3.7.0.tgz
 
 RUN wget -q https://archive.apache.org/dist/spark/spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz && \
-    tar -xzf spark-3.5.1-bin-hadoop3.tgz && \
-    mv spark-3.5.1-bin-hadoop3 spark && \
-    rm spark-3.5.1-bin-hadoop3.tgz
+    tar -xzf spark-3.5.1-bin-hadoop3.tgz && mv spark-3.5.1-bin-hadoop3 spark && rm spark-3.5.1-bin-hadoop3.tgz
 
 # --------------------------------------------------
 # Monitoring: Prometheus, Grafana, cAdvisor
@@ -58,7 +54,6 @@ RUN apt-get update -o Acquire::Retries=5 && \
     apt-get install -y ./grafana_11.1.0_amd64.deb && \
     rm -rf /var/lib/apt/lists/* grafana_11.1.0_amd64.deb
 
-# Install cAdvisor
 ARG CADVISOR_VERSION=v0.53.0
 RUN set -eux; \
     ARCH="$(dpkg --print-architecture)"; \
@@ -74,16 +69,14 @@ RUN set -eux; \
     chmod +x /usr/local/bin/cadvisor
 
 # --------------------------------------------------
-# Copy application files and monitoring configs
+# App + configs
 # --------------------------------------------------
 WORKDIR /app
 COPY . /app
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY prometheus.yml /opt/monitoring/prometheus/prometheus.yml
 
-# --------------------------------------------------
 # Cache-bust when site changes (forces rebuild on CI)
-# --------------------------------------------------
 ARG APP_HASH
 RUN echo "APP_HASH=$APP_HASH"
 
@@ -95,15 +88,13 @@ RUN set -eux; \
     rm -rf /usr/share/nginx/html/*; \
     cp /app/index.html /usr/share/nginx/html/index.html; \
     for d in images css js assets static; do \
-      if [ -d "/app/$d" ]; then \
-        cp -r "/app/$d" "/usr/share/nginx/html/$d"; \
-      fi; \
+      if [ -d "/app/$d" ]; then cp -r "/app/$d" "/usr/share/nginx/html/$d"; fi; \
     done; \
     mkdir -p /usr/share/nginx/html/phases; \
     find /app -maxdepth 1 -type f -name 'Phase*.html' -exec cp -t /usr/share/nginx/html/phases {} +
 
 # --------------------------------------------------
-# Environment variables (used by your start script)
+# Environment (used by start script)
 # --------------------------------------------------
 ENV PATH="/opt/spark/bin:/opt/kafka/bin:${PATH}"
 ENV MYSQL_ROOT_PASSWORD=root
@@ -112,7 +103,7 @@ ENV MYSQL_USER=appuser
 ENV MYSQL_PASSWORD=app123
 
 # --------------------------------------------------
-# Expose ports
+# Ports
 # --------------------------------------------------
 EXPOSE 80 9090 3000 8081 9092 3306 6379 4040
 

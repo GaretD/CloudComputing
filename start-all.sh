@@ -3,13 +3,13 @@ set -euo pipefail
 
 echo "[init] Starting CloudComputing stack..."
 
-# --- MySQL/MariaDB (run as mysql)
+# --- MariaDB/MySQL (run as mysql user)
 if command -v mysqld >/dev/null 2>&1; then
   echo "[mysql] preparing directories..."
   install -d -o mysql -g mysql /var/run/mysqld
   chown -R mysql:mysql /var/lib/mysql || true
 
-  # Initialize data dir if empty (MariaDB & MySQL compatible)
+  # Initialize data dir if empty
   if [ ! -d /var/lib/mysql/mysql ]; then
     echo "[mysql] initializing data directory..."
     if command -v mariadb-install-db >/dev/null 2>&1; then
@@ -23,7 +23,7 @@ if command -v mysqld >/dev/null 2>&1; then
   mysqld --user=mysql --daemonize || echo "[mysql] WARNING: mysqld failed to start (continuing)"
 fi
 
-# --- Redis (non-fatal if missing)
+# --- Redis (non-fatal)
 if command -v redis-server >/dev/null 2>&1; then
   echo "[redis] starting..."
   redis-server --daemonize yes || echo "[redis] WARNING: failed (continuing)"
@@ -38,13 +38,13 @@ if [ -x /opt/monitoring/prometheus/prometheus ]; then
     >/var/log/prometheus.log 2>&1 &
 fi
 
-# --- Grafana (optional; Debian service not used inside containers)
+# --- Grafana (optional)
 if command -v grafana-server >/dev/null 2>&1; then
   echo "[grafana] starting..."
   nohup grafana-server --homepath=/usr/share/grafana >/var/log/grafana.log 2>&1 &
 fi
 
-# --- Kafka/Spark (optional; comment out if you don't need them for web tests)
+# --- Kafka/Spark (optional; enable if needed)
 # if [ -x /opt/kafka/bin/kafka-server-start.sh ]; then
 #   echo "[kafka] starting..."
 #   nohup /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties >/var/log/kafka.log 2>&1 &
