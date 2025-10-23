@@ -2,12 +2,7 @@ version: "3.9"
 
 services:
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-      args:
-        WEB_DIR: .       # change to "web" or "site" if you move your files later
-    image: cloudcomputing-nginx:latest
+    image: ghcr.io/${OWNER}/${REPO}-nginx:${TAG:-latest}
     container_name: cc_nginx
     depends_on:
       - mariadb
@@ -26,7 +21,6 @@ services:
       - MARIADB_PASSWORD=${MARIADB_PASSWORD:-app123}
     volumes:
       - db_data:/var/lib/mysql
-      # Auto-load SQL files on first run (optional)
       - ./db-init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     networks: [cc_net]

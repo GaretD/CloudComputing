@@ -1,0 +1,23 @@
+# VCS & tooling
+.git
+.github
+.gitignore
+.dockerignore
+
+# Infra / non-web files
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile
+Dockerfile.nginx
+Makefile
+prometheus.yml
+start-all.sh
+clean-run.sh
+podman-compose.yml
+
+# Build caches (if present)
+node_modules
+dist
+build
+__pycache__/
+*.pyc
